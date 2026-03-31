@@ -18,7 +18,7 @@ for key in [
     "batch_summary_df",
     "batch_results",
     "single_res",
-    "uploaded_customers_name",
+    "uploaded_NIMS_name",
     "uploaded_new_name",
 ]:
     if key not in st.session_state:
@@ -257,18 +257,18 @@ with t1:
             node_data = pd.read_csv("nodes.csv")
             validate_required_columns(node_data, ["node_name", "Latitude", "Longitude"], "nodes.csv")
 
-            if uploaded_customers is None:
-                st.error("Please upload customers.xlsx")
+            if uploaded_NIMS is None:
+                st.error("Please upload NIMS.xlsx")
                 st.stop()
 
             if uploaded_new_customers is None:
                 st.error("Please upload new_customers.xlsx")
                 st.stop()
 
-            cust_data = pd.read_excel(uploaded_customers)
+            cust_data = pd.read_excel(uploaded_NIMS)
             new_custs = pd.read_excel(uploaded_new_customers).dropna(subset=["customer_name"])
 
-            validate_required_columns(cust_data, ["node_name"], "customers.xlsx")
+            validate_required_columns(cust_data, ["node_name"], "NIMS.xlsx")
             validate_required_columns(new_custs, ["customer_name", "lat", "Long"], "new_customers.xlsx")
 
             act_counts = cust_data.groupby("node_name").size().reset_index(name="act")
@@ -304,7 +304,7 @@ with t1:
             st.session_state.batch_results = results
             st.session_state.batch_summary_df = pd.DataFrame(summary_rows)
             st.session_state.batch_done = True
-            st.session_state.uploaded_customers_name = uploaded_customers.name
+            st.session_state.uploaded_customers_name = uploaded_NIMS.name
             st.session_state.uploaded_new_name = uploaded_new_customers.name
 
         except Exception as e:
