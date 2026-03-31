@@ -239,10 +239,10 @@ t1, t2 = st.tabs(["Batch Check", "Single Check"])
 with t1:
     st.caption("Fixed Data: nodes.csv, customers.xlsx, new_customers.xlsx")
 
-    uploaded_customers = st.file_uploader(
-        "Upload Customers File",
+    uploaded_NIMS = st.file_uploader(
+        "Upload NIMS File",
         type=["xlsx"],
-        key="upload_customers_file"
+        key="upload_NIMS_file"
     )
     uploaded_new_customers = st.file_uploader(
         "Upload New Customers File",
