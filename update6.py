@@ -230,7 +230,7 @@ def draw_map(res, conn=None, reco=None):
 # =========================================================
 # UI
 # =========================================================
-st.title("FTTH Smart Node Checker")
+st.title("FTTH Deployment Survey Tool")
 st.markdown("##### Powered by Zaw Min Htwe")
 st.info("Survey Result အား Routing အကွာအဝေးကို လမ်းကြောင်းအတိုင်း တွက်ချက်ပေးပါသည်。")
 
