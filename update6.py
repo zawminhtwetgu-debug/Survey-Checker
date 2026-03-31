@@ -4,7 +4,7 @@ import streamlit as st
 from streamlit_folium import st_folium
 from fpdf import FPDF
 
-st.set_page_config(layout="wide", page_title="FTTH Smart Node Checker")
+st.set_page_config(layout="wide", page_title="FTTH Deployment Survey Tool")
 
 MAX_DISTANCE = 350
 MAX_CAPACITY = 16
