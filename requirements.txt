@@ -5,3 +5,4 @@ requests
 streamlit-folium
 openpyxl
 xlsxwriter
+fpdf
