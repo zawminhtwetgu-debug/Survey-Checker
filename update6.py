@@ -27,14 +27,6 @@ def clean_num(value):
     except:
         return None
 
-def clean_for_pdf(text):
-    if not isinstance(text, str):
-        text = str(text)
-    replacements = {"\u2013": "-", "\u2014": "-", "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'}
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    return text.encode("latin-1", "replace").decode("latin-1")
-
 def haversine(lat1, lon1, lat2, lon2):
     if pd.isna(lat1) or pd.isna(lon1) or pd.isna(lat2) or pd.isna(lon2): return 999999
     r = 6371000
@@ -84,7 +76,6 @@ def analyze_one_customer(nodes_df, cust_name, cust_lat, cust_lon, connected_name
             is_dist_ok = dist <= MAX_DISTANCE
             is_port_ok = n["act"] < MAX_CAPACITY
             
-            # Status and Reason mapping based on requested image
             if is_dist_ok and is_port_ok:
                 stat, reas = "OK", "Can Deploy"
             elif not is_dist_ok:
@@ -97,7 +88,7 @@ def analyze_one_customer(nodes_df, cust_name, cust_lat, cust_lon, connected_name
         else:
             res.update({"connected_status": "NOK", "connected_reason": "Node Not Found"})
 
-    if res["connected_reason"] != "Can Deploy":
+    if res["connected_status"] != "OK":
         temp_nodes = nodes_df.copy()
         temp_nodes["temp_dist"] = temp_nodes.apply(lambda r: haversine(cust_lat, cust_lon, r["Latitude"], r["Longitude"]), axis=1)
         candidates = temp_nodes[temp_nodes["temp_dist"] < 600].sort_values("temp_dist").head(TOP_FALLBACK_NODES)
@@ -125,28 +116,41 @@ def draw_map(res, conn=None, reco=None):
 # =========================================================
 st.title("FTTH Deployment Survey Tool")
 st.markdown("##### Powered by Zaw Min Htwe")
-st.info("Shortest Path Logic: လမ်းကြောင်းအတိုင်းတွက်ချက်ပြီး အဝေးကြီးပတ်မသွားစေရန် Detour Detection ထည့်သွင်းထားပါသည်။")
 
 t1, t2 = st.tabs(["Batch Check", "Single Check"])
 with t1:
-    st.caption("Fixed Data: nodes.csv, NIMS.xlsx, new_customers.xlsx")
+    col_u1, col_u2 = st.columns(2)
+    with col_u1:
+        nims_file = st.file_uploader("Upload NIMS File (xlsx)", type=["xlsx"])
+    with col_u2:
+        new_cust_file = st.file_uploader("Upload New Customer File (xlsx)", type=["xlsx"])
+    
     col_b1, col_b2 = st.columns(2)
     if col_b1.button("Run Batch", type="primary"):
-        try:
-            # Changed filename to NIMS
-            node_data, cust_data = pd.read_csv("nodes.csv"), pd.read_excel("NIMS.xlsx")
-            act_counts = cust_data.groupby("node_name").size().reset_index(name="act")
-            nodes = node_data.merge(act_counts, on="node_name", how="left").fillna(0)
-            nodes["node_name_upper"] = nodes["node_name"].astype(str).str.strip().str.upper()
-            new_custs = pd.read_excel("new_customers.xlsx").dropna(subset=["customer_name"])
-            results, summary_rows = [], []
-            prog = st.progress(0)
-            for i, (_, r) in enumerate(new_custs.iterrows()):
-                res = analyze_one_customer(nodes, r["customer_name"], clean_num(r["lat"]), clean_num(r["Long"]), r.get("connected_node"), str(r.get("Partner", "-")))
-                results.append(res); summary_rows.append({"Customer Name": res["customer_name"], "Partner": res["partner"], "Lat": res["cust_lat"], "Long": res["cust_lon"], "Status": res["connected_status"], "Reason": res["connected_reason"], "Connected Node": res["connected_name"], "Distance (m)": res["connected_dist"], "Recommended": res["recommended_map_obj"]["name"] if res["recommended_map_obj"] else "-"})
-                prog.progress((i + 1) / len(new_custs))
-            st.session_state.batch_results, st.session_state.batch_summary_df, st.session_state.batch_done = results, pd.DataFrame(summary_rows), True
-        except Exception as e: st.error(f"Error: {e}")
+        if nims_file and new_cust_file:
+            try:
+                node_data = pd.read_csv("nodes.csv")
+                cust_data = pd.read_excel(nims_file)
+                act_counts = cust_data.groupby("node_name").size().reset_index(name="act")
+                nodes = node_data.merge(act_counts, on="node_name", how="left").fillna(0)
+                nodes["node_name_upper"] = nodes["node_name"].astype(str).str.strip().str.upper()
+                
+                new_custs = pd.read_excel(new_cust_file).dropna(subset=["customer_name"])
+                results, summary_rows = [], []
+                prog = st.progress(0)
+                for i, (_, r) in enumerate(new_custs.iterrows()):
+                    res = analyze_one_customer(nodes, r["customer_name"], clean_num(r["lat"]), clean_num(r["Long"]), r.get("connected_node"), str(r.get("Partner", "-")))
+                    results.append(res)
+                    summary_rows.append({
+                        "Customer Name": res["customer_name"], "Partner": res["partner"], "Lat": res["cust_lat"], "Long": res["cust_lon"],
+                        "Status": res["connected_status"], "Reason": res["connected_reason"], "Connected Node": res["connected_name"],
+                        "Distance (m)": res["connected_dist"], "Recommended": res["recommended_map_obj"]["name"] if res["recommended_map_obj"] else "-"
+                    })
+                    prog.progress((i + 1) / len(new_custs))
+                st.session_state.batch_results, st.session_state.batch_summary_df, st.session_state.batch_done = results, pd.DataFrame(summary_rows), True
+            except Exception as e: st.error(f"Error: {e}")
+        else:
+            st.warning("Please upload both NIMS and New Customer files.")
 
     if col_b2.button("Clear Batch"): st.session_state.batch_done = False; st.rerun()
 
@@ -157,13 +161,13 @@ with t1:
         with f_col1: sel_p = st.multiselect("Partner", options=sorted(df_full["Partner"].unique()))
         with f_col2: sel_s = st.multiselect("Status", options=sorted(df_full["Status"].unique()))
         with f_col3: sel_r = st.multiselect("Reason", options=sorted(df_full["Reason"].unique()))
+        
         f_df = df_full.copy()
         if sel_p: f_df = f_df[f_df["Partner"].isin(sel_p)]
         if sel_s: f_df = f_df[f_df["Status"].isin(sel_s)]
         if sel_r: f_df = f_df[f_df["Reason"].isin(sel_r)]
         st.dataframe(f_df, use_container_width=True)
         
-        # Export Excel with Fixed Width
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             f_df.to_excel(writer, index=False, sheet_name='Survey_Results')
@@ -178,7 +182,6 @@ with t1:
         if c_opts:
             sel = st.selectbox("Select Customer to View Detail", options=c_opts, label_visibility="collapsed")
             res = next(r for r in st.session_state.batch_results if str(r["customer_name"]) == str(sel))
-            # Detail display formatted like requested images
             st.markdown("## Customer Survey Result")
             st.markdown(f"**Customer:** {res['customer_name']} | **Partner:** {res['partner']}")
             st.markdown(f"**Lat/Long:** {res['cust_lat']}, {res['cust_lon']}")
