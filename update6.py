@@ -60,7 +60,8 @@ def analyze_one_customer(nodes_df, cust_name, cust_lat, cust_lon, connected_name
         "customer_name": cust_name, "cust_lat": cust_lat, "cust_lon": cust_lon,
         "partner": partner, "connected_name": connected_name or "-",
         "connected_status": "NOK", "connected_reason": "-",
-        "connected_dist": "-", "connected_map_obj": None, "recommended_map_obj": None
+        "connected_dist": "-", "connected_map_obj": None, "recommended_map_obj": None,
+        "is_single_reco": False  # Helper flag for display logic
     }
     if pd.isna(cust_lat) or pd.isna(cust_lon):
         res["connected_reason"] = "Location Error"
@@ -68,6 +69,7 @@ def analyze_one_customer(nodes_df, cust_name, cust_lat, cust_lon, connected_name
 
     search_name = str(connected_name).strip().upper() if connected_name and str(connected_name).strip() != "-" else None
 
+    # Step 1: Check search node if provided
     if search_name:
         node = nodes_df[nodes_df["node_name_upper"] == search_name]
         if not node.empty:
@@ -88,6 +90,7 @@ def analyze_one_customer(nodes_df, cust_name, cust_lat, cust_lon, connected_name
         else:
             res.update({"connected_status": "NOK", "connected_reason": "Node Not Found"})
 
+    # Step 2: Search for recommendation if status is not OK OR if no node was specified (Single Check automatic search)
     if res["connected_status"] != "OK":
         temp_nodes = nodes_df.copy()
         temp_nodes["temp_dist"] = temp_nodes.apply(lambda r: haversine(cust_lat, cust_lon, r["Latitude"], r["Longitude"]), axis=1)
@@ -97,6 +100,12 @@ def analyze_one_customer(nodes_df, cust_name, cust_lat, cust_lon, connected_name
             dist, geom = get_shortest_path(cust_lat, cust_lon, n["Latitude"], n["Longitude"])
             if dist <= MAX_DISTANCE and n["act"] < MAX_CAPACITY:
                 res["recommended_map_obj"] = {"name": n["node_name"], "lat": n["Latitude"], "lon": n["Longitude"], "dist": dist, "geom": geom, "status": "OK", "reason": "Can Deploy"}
+                
+                # If no node was input, promote this recommendation to the primary status
+                if not search_name:
+                    res["connected_status"] = "OK"
+                    res["connected_dist"] = int(dist)
+                    res["is_single_reco"] = True
                 break
     return res
 
@@ -204,5 +213,10 @@ with t2:
             st.session_state.single_res = analyze_one_customer(n_s, s_na, clean_num(s_la), clean_num(s_lo), s_no)
     if st.session_state.single_res:
         r = st.session_state.single_res
-        st.markdown(f"**Status:** {r['connected_status']} | **Reason:** {r['connected_reason']} | **Distance:** {r['connected_dist']}m")
+        # Task Logic: Single check display update
+        if r["is_single_reco"] and r["recommended_map_obj"]:
+            st.markdown(f"**Status:** {r['connected_status']} | **Recommended:** {r['recommended_map_obj']['name']} | **Distance:** {r['connected_dist']}m")
+        else:
+            st.markdown(f"**Status:** {r['connected_status']} | **Reason:** {r['connected_reason']} | **Distance:** {r['connected_dist']}m")
+        
         st_folium(draw_map(r, r["connected_map_obj"], r["recommended_map_obj"]), height=500, width=1000)
